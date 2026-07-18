@@ -1,0 +1,13 @@
+# Core data pipeline
+pandas>=2.2
+numpy>=1.26
+openpyxl>=3.1
+python-dateutil>=2.9
+tqdm>=4.66
+rapidfuzz>=3.9
+
+# Scraping (opsional tapi disarankan untuk analisa harga live)
+playwright>=1.44
+requests>=2.32
+beautifulsoup4>=4.12
+lxml>=5.2

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Output & logs (data hasil, bukan kode)
+output/*.xlsx
+logs/*.log
+
+# File produk mentah (data internal, jangan di-commit)
+input/*.xlsx
+input/*.xls
+input/*.csv
+
+# Excel lock files
+~$*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jaga folder tetap ada di git
+!input/.gitkeep
+!output/.gitkeep
+!logs/.gitkeep
