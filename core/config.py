@@ -145,8 +145,9 @@ PRICE_OUTLIER_FLOOR = 0.35
 VERIFY_PRICES = True
 VERIFY_TOP_N = 3
 # Jeda acak antar request supaya lebih sopan / mengurangi blokir (detik).
-SCRAPE_MIN_DELAY = 1.0
-SCRAPE_MAX_DELAY = 3.0
+# Diperbesar demi mengurangi risiko rate-limit pada batch besar.
+SCRAPE_MIN_DELAY = 2.0
+SCRAPE_MAX_DELAY = 5.0
 # User-Agent default untuk request.
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

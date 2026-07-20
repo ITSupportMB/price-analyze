@@ -9,6 +9,9 @@ env/
 output/*.xlsx
 logs/*.log
 
+# Cache checkpoint hasil scraping (data, bukan kode)
+cache/
+
 # File produk mentah (data internal, jangan di-commit)
 input/*.xlsx
 input/*.xls

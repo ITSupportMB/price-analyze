@@ -87,16 +87,51 @@ Hasil: `output/Main Data Product.xlsx` (sheet **Main Data** + **Summary**).
 ### Opsi CLI
 
 ```bash
-python main.py --no-scrape           # hanya merge + cleaning + Excel (tanpa scraping)
-python main.py --limit 50            # scrape 50 produk pertama (uji cepat)
+python main.py --no-scrape           # hanya merge + Excel dari cache (tanpa scraping)
+python main.py --limit 50            # scrape 50 produk pertama
 python main.py --input "D:/data"     # folder input lain
 python main.py --marketplaces Tokopedia          # default (Shopee/Lazada diblokir)
 python main.py --headless            # paksa headless (lebih cepat, sering diblokir)
+python main.py --concurrency 1       # paling akurat & tahan blokir (lambat)
 ```
 
 > Saat scraping, **jendela Chrome akan muncul** (mode headed) dan **jangan
 > ditutup** sampai proses selesai. Pastikan file output tidak sedang dibuka
 > di Excel (kalau terkunci, program memberi pesan jelas & berhenti aman).
+
+### Scraping bertahap (batch) + checkpoint — WAJIB untuk banyak produk
+
+Tokopedia **memblokir setelah beberapa ratus request** dalam satu sesi, jadi
+**tidak mungkin** scrape ribuan produk sekaligus. Solusinya: cicil per batch.
+Hasil tiap batch **diakumulasi ke `cache/marketplace_cache.json`**; produk yang
+sudah dapat harga otomatis **dilewati**, yang gagal/terblokir **diretry** di
+sesi berikutnya. Excel selalu ditulis dari **seluruh cache**.
+
+**Cara termudah — `--next` (disarankan):** jalankan **perintah yang sama** tiap
+sesi; program otomatis mengambil produk berikutnya yang belum punya data.
+```bash
+python main.py --next 200 --concurrency 1
+# beri jeda (jam/hari), lalu jalankan LAGI perintah yang sama:
+python main.py --next 200 --concurrency 1
+# ...ulangi sampai "Sisa: 0". Batch yang terblokir otomatis diretry sesi berikut.
+```
+
+**Cara manual — `--offset` (kalau mau kontрol rentang tepat):**
+```bash
+python main.py --offset 0   --limit 200 --concurrency 1   # produk 0..199
+python main.py --offset 200 --limit 200 --concurrency 1   # produk 200..399
+python main.py --offset 400 --limit 200 --concurrency 1   # dst...
+```
+
+**Lain-lain:**
+```bash
+python main.py --refresh --offset 0 --limit 200   # update harga yg sudah tercache
+python main.py --no-scrape                        # rebuild Excel dari cache, tanpa scraping
+```
+
+**Tips anti-blokir:** batch kecil (150–200), `--concurrency 1`, jeda antar sesi
+(jam/hari), dan idealnya ganti jaringan/IP tiap sesi. Fokus ke produk prioritas
+(nilai tinggi / laku keras) daripada semua 5.000+ produk.
 
 ---
 

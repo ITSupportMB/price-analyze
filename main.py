@@ -62,6 +62,25 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Lewati verifikasi harga via halaman produk (lebih cepat, kurang akurat).",
     )
+    p.add_argument(
+        "--offset",
+        type=int,
+        default=0,
+        help="Mulai scraping dari produk ke-N (untuk batch). Dipadukan dengan --limit.",
+    )
+    p.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Scrape ulang walau sudah ada di cache (mis. untuk update harga).",
+    )
+    p.add_argument(
+        "--next",
+        type=int,
+        default=0,
+        dest="next_n",
+        help="Scrape N produk BERIKUTNYA yang belum tercache (otomatis maju tiap "
+        "sesi). Cara termudah mencicil ribuan produk; abaikan --offset.",
+    )
     return p.parse_args()
 
 
@@ -93,10 +112,15 @@ def main() -> int:
         return 1
     log.info("Main Data Product: %d produk, %d kolom.", len(master), master.shape[1])
 
-    # --- Tahap 3-4: scraping ---
-    scrape_results: dict[int, list] = {}
+    # --- Tahap 3-4: scraping (bertahap + cache) ---
+    from core import cache
+
+    queries_all = analyzer.build_queries(master)
+    cache_data = cache.load_cache()
+    log.info("Cache saat ini: %d produk punya data marketplace.", len(cache_data))
+
     if args.no_scrape:
-        log.info("--no-scrape aktif: melewati pencarian marketplace.")
+        log.info("--no-scrape aktif: pakai data cache saja, tanpa scraping.")
     else:
         if args.headless:
             config.SCRAPE_HEADLESS = True
@@ -107,15 +131,54 @@ def main() -> int:
             config.VERIFY_PRICES = False
             log.info("--no-verify aktif: harga tidak diverifikasi via halaman produk.")
         log.info("Konkurensi scraping: %d produk paralel.", config.SCRAPE_CONCURRENCY)
-        queries = analyzer.build_queries(master)
-        if args.limit and args.limit > 0:
-            log.info("Scraping dibatasi ke %d produk pertama (uji cepat).", args.limit)
-            queries = queries[: args.limit]
-        # Import lambat supaya --no-scrape tetap jalan tanpa Playwright.
-        from scraper.manager import run_scraping
 
-        marketplaces = [m.strip() for m in args.marketplaces.split(",") if m.strip()]
-        scrape_results = run_scraping(queries, marketplaces)
+        if args.next_n and args.next_n > 0:
+            # Mode termudah: ambil N produk berikutnya yang BELUM tercache,
+            # otomatis maju tiap sesi tanpa perlu mengatur offset.
+            uncached = [q for q in queries_all if cache.query_key(q) not in cache_data]
+            to_scrape = uncached[: args.next_n]
+            log.info(
+                "Mode --next: %d produk belum tercache; ambil %d berikutnya. "
+                "Sisa setelah sesi ini: ~%d.",
+                len(uncached),
+                len(to_scrape),
+                max(0, len(uncached) - len(to_scrape)),
+            )
+        else:
+            # Jendela batch manual: produk ke-[offset .. offset+limit).
+            offset = max(0, args.offset)
+            window = queries_all[offset:]
+            if args.limit and args.limit > 0:
+                window = window[: args.limit]
+            # Lewati yang sudah ada di cache (kecuali --refresh).
+            if args.refresh:
+                to_scrape = window
+            else:
+                to_scrape = [q for q in window if cache.query_key(q) not in cache_data]
+            log.info(
+                "Batch: offset=%d, jendela=%d produk | %d sudah tercache (dilewati), %d akan discrape.",
+                offset,
+                len(window),
+                len(window) - len(to_scrape),
+                len(to_scrape),
+            )
+
+        if to_scrape:
+            # Import lambat supaya --no-scrape tetap jalan tanpa Playwright.
+            from scraper.manager import run_scraping
+
+            marketplaces = [m.strip() for m in args.marketplaces.split(",") if m.strip()]
+            new_results = run_scraping(to_scrape, marketplaces)
+            added = cache.update_cache(cache_data, to_scrape, new_results)
+            cache.save_cache(cache_data)
+            log.info("Cache diperbarui: +%d produk (total %d).", added, len(cache_data))
+        else:
+            log.info("Semua produk di jendela ini sudah tercache; tidak ada yang discrape.")
+
+    # scrape_results dibangun dari SELURUH cache -> Excel menampilkan akumulasi
+    # semua batch, bukan hanya batch terakhir.
+    scrape_results = cache.build_scrape_results(queries_all, cache_data)
+    log.info("Total produk dengan data marketplace (akumulasi): %d", len(scrape_results))
 
     # --- Tahap 5: analisa ---
     analyzed = analyzer.analyze(master, scrape_results)
